@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Avatar IA</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
+    font-family: -apple-system, "SF Pro Display", Helvetica, Arial, sans-serif; color: #fff; }
+  #pregunta { position: absolute; top: 15%; left: 4%; right: 4%; display: flex; gap: 12px; align-items: center; }
+  #pic { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; flex: none; background: #222; }
+  #quien { color: #9a9a9a; font-size: 15px; margin-bottom: 2px; }
+  #q { font-size: 23px; font-weight: 800; line-height: 1.2; word-break: break-word; }
+  #escena { position: absolute; left: 6%; right: 6%; top: 25%; height: 40%; }
+  #escena canvas { width: 100% !important; height: 100% !important; display: block; }
+  #leyenda { position: absolute; right: 2%; top: 42%; display: flex; flex-direction: column; gap: 14px;
+    align-items: center; width: 84px; text-align: center; }
+  #leyenda .ic { font-size: 38px; line-height: 1; }
+  #leyenda .tx { font-size: 9px; font-weight: 800; text-transform: uppercase; text-shadow: 0 1px 2px #000; }
+  #start { position: fixed; inset: 0; background: #000; z-index: 10; display: flex; align-items: center; justify-content: center; }
+  #start button { font-size: 20px; font-weight: 700; padding: 16px 28px; border: 0; border-radius: 14px;
+    background: #fe2c55; color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="start"><button id="ini">▶ Toca para iniciar</button></div>
+
+<div id="pregunta">
+  <img id="pic" alt="" style="display:none">
+  <div>
+    <div id="quien"></div>
+    <div id="q">Escribe tu pregunta en el chat 👇</div>
+  </div>
+</div>
+
+<div id="escena"></div>
+
+<div id="leyenda">
+  <div><div class="ic">🫰</div><div class="tx">Respóndeme primero</div></div>
+  <div><div class="ic">🌹</div><div class="tx">Anímame</div></div>
+  <div><div class="ic">🎆</div><div class="tx">Di mi nombre</div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ?leyenda=0 oculta los iconos de la derecha (si ya los muestra TikTok)
+if (new URLSearchParams(location.search).get('leyenda') === '0') document.getElementById('leyenda').style.display = 'none';
+
+// ================= CABEZA 3D =================
+const el = document.getElementById('escena');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+el.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+camera.position.z = 5.4;
+function resize() {
+  const w = el.clientWidth, h = el.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+const head = new THREE.Group();
+scene.add(head);
+
+// forma de cabeza a partir de una esfera
+const geo = new THREE.SphereGeometry(1, 44, 36);
+const P = geo.attributes.position;
+const N = P.count;
+const base = new Float32Array(N * 3);
+for (let i = 0; i < N; i++) {
+  const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+  let X = x * 0.78, Y = y * 1.15, Z = z * 0.9;
+  if (Y < -0.1) { const t = Math.min(1, (-Y - 0.1) / 1.05); X *= 1 - 0.3 * t; Z *= 1 - 0.22 * t; } // mentón
+  if (Z > 0) {
+    Z += 0.2 * Math.exp(-(X * X * 20 + (Y + 0.08) * (Y + 0.08) * 10));                               // nariz
+    Z -= 0.06 * Math.exp(-(Math.pow(Math.abs(X) - 0.3, 2) * 40 + Math.pow(Y - 0.2, 2) * 40));        // cuencas
+  }
+  base[i * 3] = X; base[i * 3 + 1] = Y; base[i * 3 + 2] = Z;
+}
+
+const relleno = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+  color: 0x0a3d85, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+const malla = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+  color: 0x39b6ff, wireframe: true, transparent: true, opacity: 0.9 }));
+const puntos = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0x9fe6ff, size: 0.02 }));
+head.add(relleno, malla, puntos);
+
+// ojos
+function crearOjo(x) {
+  const g = new THREE.Group();
+  const blanco = new THREE.SphereGeometry(1, 16, 12); blanco.scale(0.14, 0.075, 0.05);
+  g.add(new THREE.Mesh(blanco, new THREE.MeshBasicMaterial({ color: 0xf2f8ff })));
+  const pg = new THREE.SphereGeometry(1, 12, 10); pg.scale(0.05, 0.05, 0.03);
+  const pupila = new THREE.Mesh(pg, new THREE.MeshBasicMaterial({ color: 0x0a2a55 }));
+  pupila.position.z = 0.035;
+  g.add(pupila);
+  g.position.set(x, 0.2, 0.77);
+  g.userData.pupila = pupila;
+  head.add(g);
+  return g;
+}
+const ojoI = crearOjo(-0.3), ojoD = crearOjo(0.3);
+
+// boca
+const bg = new THREE.SphereGeometry(1, 16, 10); bg.scale(0.2, 1, 0.03);
+const boca = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: 0x001226 }));
+head.add(boca);
+
+function deformarMandibula(abierta) {
+  for (let i = 0; i < N; i++) {
+    const bx = base[i * 3], by = base[i * 3 + 1], bz = base[i * 3 + 2];
+    let dy = 0, dz = 0;
+    if (by < -0.3 && bz > -0.3) {
+      const w = Math.min(1, (-0.3 - by) / 0.5);
+      dy = -abierta * 0.2 * w; dz = -abierta * 0.04 * w;
+    }
+    P.setXYZ(i, bx, by + dy, bz + dz);
+  }
+  P.needsUpdate = true;
+}
+
+let hablando = false, abierta = 0;
+const t0 = performance.now();
+function animar(now) {
+  const t = (now - t0) / 1000;
+  const objetivo = hablando ? 0.25 + 0.75 * Math.abs(Math.sin(t * 13) * Math.sin(t * 5.3 + 1)) : 0;
+  abierta += (objetivo - abierta) * 0.35;
+  deformarMandibula(abierta);
+  boca.position.set(0, -0.5 - abierta * 0.08, 0.79);
+  boca.scale.y = 0.012 + abierta * 0.09;
+
+  head.rotation.y = Math.sin(t * 0.6) * 0.28;
+  head.rotation.x = Math.sin(t * 0.4) * 0.05 + (hablando ? Math.sin(t * 9) * 0.02 : 0);
+  head.position.y = Math.sin(t * 1.2) * 0.03;
+
+  const parpadeo = (t % 4.2) < 0.15 ? 0.1 : 1;
+  ojoI.scale.y = ojoD.scale.y = parpadeo;
+  [ojoI, ojoD].forEach((o) => {
+    o.userData.pupila.position.x = Math.sin(t * 0.7) * 0.05;
+    o.userData.pupila.position.y = 0.012 + Math.sin(t * 0.9) * 0.012;
+  });
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(animar);
+}
+requestAnimationFrame(animar);
+
+// ================= VOZ =================
+let voz = null;
+function elegirVoz() {
+  const vs = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('es'));
+  const pref = ['Jorge', 'Diego', 'Juan', 'Carlos', 'Eddy', 'Reed'];
+  voz = vs.find((v) => pref.some((p) => v.name.includes(p))) || vs.find((v) => v.lang === 'es-MX') || vs[0] || null;
+}
+speechSynthesis.onvoiceschanged = elegirVoz;
+elegirVoz();
+
+function hablar(texto) {
+  return new Promise((resolve) => {
+    let fin = false;
+    const terminar = () => { if (fin) return; fin = true; hablando = false; resolve(); };
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = 'es-MX';
+    if (voz) u.voice = voz;
+    u.rate = 1.05;
+    u.pitch = 0.85;
+    u.onstart = () => { hablando = true; };
+    u.onend = terminar;
+    u.onerror = terminar;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    setTimeout(terminar, Math.max(5, texto.length / 9) * 1000 + 4000); // por si iOS no avisa el final
+  });
+}
+
+// ================= CONEXIÓN CON EL SERVIDOR =================
+function mostrar(d) {
+  document.getElementById('quien').textContent = d.usuario || '';
+  document.getElementById('q').textContent = d.pregunta || '';
+  const pic = document.getElementById('pic');
+  if (d.pic) { pic.src = d.pic; pic.style.display = ''; } else { pic.style.display = 'none'; }
+}
+
+function conectar() {
+  const es = new EventSource('/eventos');
+  es.addEventListener('turno', async (e) => {
+    const d = JSON.parse(e.data);
+    mostrar(d);
+    await hablar(d.respuesta);
+    fetch('/listo', { method: 'POST' });
+  });
+}
+
+document.getElementById('ini').onclick = () => {
+  document.getElementById('start').remove();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); // desbloquea el audio en iPhone
+  try { if (navigator.wakeLock) navigator.wakeLock.request('screen'); } catch (e) {}
+  conectar();
+};
+</script>
+</body>
+</html>
