@@ -235,7 +235,7 @@ function reintentar(ms) {
 }
 async function conectar() {
   if (!TIKTOK_USER) return console.log('⚠️ Falta la variable TIKTOK_USER');
-  const c = new Conn(TIKTOK_USER);
+  const c = new Conn(TIKTOK_USER, {});
   c.on('chat', alChat);
   c.on('gift', alRegalo);
   c.on('follow', alSeguir);
